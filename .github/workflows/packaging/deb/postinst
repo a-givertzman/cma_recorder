@@ -1,0 +1,48 @@
+#!/bin/bash
+# 
+# Deb package postinst script for API Server
+#
+############ CONFIGURATION SECTION ############
+#
+# Standart user, pass, database name for CMA Recorder service
+#
+user="crane_data_server"
+pass="00d0-25e4-*&s2-ccds"
+db="crane_data_server"
+#
+############ LIST OF SQL SCRIPTS TO BE EXECUTED ############
+# list of SQL scripts to be executed in the format:
+# 	[database] <path to sql script> <description>
+read -r -d '' scripts << EOF
+    "" "/etc/cma-recorder/create_user.sql" "Creating CMA database user '$user'..."
+    "" "/etc/cma-recorder/create_db.sql" "Creating CMA database '$db'..."
+    "" "/etc/cma-recorder/create_grant_user.sql" "Grant CMA user '$db'..."
+    "$db" "/etc/cma-recorder/create_tags.sql" "Creating 'tags' table..."
+    "$db" "/etc/cma-recorder/create_event.sql" "Creating 'event' table..."
+    "$db" "/etc/cma-recorder/create_event_view.sql" 
+EOF
+
+############ INSTALLATION ACTIONS ############
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+GRAY='\033[1;30m'
+NC='\033[0m' # No Color
+# echo -e ""
+# echo -e "POST INST called with: \ntarg1: $1\ntarg2: $2\ntarg3: $3\ntarg4: $4" 
+############ LOAD TO DB VIA PSQL ############
+regex='\"([^\"]*?)\"[ \t]+\"([^\"]+?)\"([ \t]+\"([^\"]+?)\")?'
+while IFS= read -r row; do
+    [[ $row =~ $regex ]]
+    connect=${BASH_REMATCH[1]:=""}
+    path=${BASH_REMATCH[2]:="${RED}not specified${NC}"}
+    description=${BASH_REMATCH[4]:="Unnamed SQL script..."}
+    echo ""
+    echo -e "$description"
+    echo -e "\t${GRAY}from file:${NC} $path"
+    echo -e "\t${GRAY}connect to database:${NC} $connect"
+    if [ -z "$connect" ]; then
+        echo $sql | sudo -i -u postgres psql --echo-errors -a -f "$path"
+    else
+        echo $sql | sudo -i -u postgres psql --echo-errors --dbname=$connect -a -f "$path"
+    fi
+done <<< "$scripts"
